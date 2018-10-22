@@ -1,0 +1,147 @@
+DEFINE THE PROBLEM:
+PCR duplicates arise from multiple PCR products from the same template molecule binding on the flowcell. These should be removed because there is concern they can lead to false positive variant calls
+
+##################################################
+EXAMPLES:
+
+*note: 
+files can be found on talapas : /projects/bgmp/shared/deduper/
+
+input sam file:
+NS500451:154:HWKTMBGXX:1:21109:13917:4826:GTTCACCT	0	2	76895536	36	71M	*	0	0	GCACTCTCAGGTAGGCATCACAGCTACTGCTTCCAAAGTCATTTTCCACCTTGAACGTGTACTGTCCACTG	EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEA	MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+NS500451:154:HWKTMBGXX:1:21109:21992:57537:GTTCACCT	0	2	76895536	36	71M	*	0	0	GCACTCTCAGGTAGGCATCACAGCTACTGCTTCCAAAGTCATTTTCCACCTTGAACGTGTACTGTCCACTG	EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEA	MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+NS500451:154:HWKTMBGXX:1:21109:21285:18673:GTTCACCT	0	2	76782057	36	41M92N30M	*	0	0	GTCTCCTCGAACAGCCAGGCGCAACTTAATAGTGGGAGGGACTTCATCATCCTGTATGACTACGTTAAGAG	EEA/EEEAAAEAEEEEE/EEEEEA/EEEEEAEEAA<EA<EEEEEEEEEEEEA/<<EEEE<EE<EEAEEA</	MD:Z:71NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU	XS:A:-	XG:Z:A
+
+
+expected output sam file: output_deduped.SAM
+NS500451:154:HWKTMBGXX:1:21109:21992:57537:GTTCACCT	0	2	76895536	36	71M	*	0	0	GCACTCTCAGGTAGGCATCACAGCTACTGCTTCCAAAGTCATTTTCCACCTTGAACGTGTACTGTCCACTG	EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEA	MD:Z:71	NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU
+NS500451:154:HWKTMBGXX:1:21109:21285:18673:GTTCACCT	0	2	76782057	36	41M92N30M	*	0	0	GTCTCCTCGAACAGCCAGGCGCAACTTAATAGTGGGAGGGACTTCATCATCCTGTATGACTACGTTAAGAG	EEA/EEEAAAEAEEEEE/EEEEEA/EEEEEAEEAA<EA<EEEEEEEEEEEEA/<<EEEE<EE<EEAEEA</	MD:Z:71NH:i:1	HI:i:1	NM:i:0	SM:i:36	XQ:i:40	X2:i:0	XO:Z:UU	XS:A:-	XG:Z:A
+
+#############################################
+
+PSEUDOCODE:
+
+
+argparse options that will be used in code:
+-f,  --file   required arg  insert absolute file path
+-p,  --paired optional arg  designates file is paired end(not single-end)
+-s,  --single optional arg  designates file is single end(not paired-end)
+-u,  --umi    optional arg  desginates file containing the list of UMIs
+
+*note:
+if script is not capable of doing something make sure to print out an error message
+example:  for single end reads, print out and error if you see and paired end reads
+
+#####################################################
+
+DICTIONARIES:
+
+*debating if I should use this or not, could be very memory intensive*
+
+UMI_dict:
+create a dictionary to store all the provide UMIs
+#UMIs are found on github under the STL96.txt file
+#there is a total of 96 UMIs
+
+duplicate_dict:
+create an empty dictionary to store UMIs, FLAGS, RNAME and POS
+**this is important to tell whether you have duplicates or not.
+Keys: UMIs
+Values: tuples of RNAME and POS
+
+#####################################################
+
+FUNCTIONS:
+
+*non yet*
+
+###################################################
+
+COUNTERS:
+
+total = 0
+trash = 0
+errors = 0
+
+###################################################
+
+before you open the file, use SAMtools sort
+
+open sam file to read (f1)
+open output file to write good reads (f2)
+open outputfile to write duplicated reads 'trash' file (f3)
+    for line in f1
+        strip off new lines ('\n') 
+            #remove header, we dont want this, we will later tho
+            if line startswith ('@')
+                continue
+            else:
+                split lines by tabs. This will help to call columns individually as an index
+                #remember index starts at 0
+                QNAME (UMI) is column 0
+                FLAG (single vs pair end and strand specific) is column 1
+                RNAME(chromosome) is column 2
+                POS (position) is column 3
+                MAPQ is column 4
+                CIGAR (soft clipping) is column 5
+                RNEXT is column 6
+                PNEXT is column 7
+                TLEN is column 8
+                SEQ is column 9
+                QUAL is column 10
+
+                #check that these reads are single end reads only
+                for FLAG column in line
+                    if FLAG is paired-end:
+                        print "ERROR, this is a paired-end strand. "
+                        increment to 'error' counter
+                        Break
+                    else:
+                        #we continue with code and now check strandedness
+                        if FLAG is a forward strand(+)
+                            #account for any matching/unmathing (M), softclipping(S), splicing(N), and indels (I/D)
+                            #remember for forward strand, position start at the left most end
+                            #softclipping also starts in on either ends of the read
+                            #only account for S thats on the left side of the string, ignore the right side
+                            #N, I, & D can only happen in the middle of the read, so dont worry too much about these here
+                            Use RegEx to get the number before softclipping from the cigar string and put this into a variable  called S
+                            Create a variable for adjusted postion where you subtract POS from S
+                            
+                        else: 
+                            #if FLAG is reverse strand (-)
+                            #remember for reverse strand, position starts the right most end
+                            Use RegEx to account for softclipping and N's, I's, and D's
+                            #only account the S the occur on the right end, ignore the S that on left of the cigar string 
+                            Create a varialbe for adjusted position where you add POS, M, S, I, D, and N
+                            
+                #attach all columns back into one line
+                set a variable where you add all the columns (0 through 10) back into the read
+                #check if you have any duplicates
+                if line in file mathes/equals a line in file 2(the duper file)
+                    throw this read to the 'trash' file because we have duplicate and we only want to keep one read
+                    increment to trash file counter so we konw how many reads in there (f3)
+                else:
+                    #this line does not match another line, there is no duplicate
+                    add this line to file 2
+                
+                increment to total counter so we know how many files have been addded to f2
+                      
+                      
+                      
+                      
+ #################################################################
+ 
+ *NOTE:
+ This is going to be very memory intensive. 
+ There are multiple ways to potentially store data
+ 1. Dicitionaries as stated above where you stored the UMI as a key and everthing else as a tuple or string
+ 2. List
+ 3. File. Output reads to a new file and read it as fh.readlines() or possible use fh.seek(). This method was used in psudo code where I see if a line from the SAM file matches any other lines that are in the new file. 
+ 
+                      
+                      
+                            
+Rembmer to output yourfile and name it '_deduped"
+name your script  "chilin_deduper.py"
+                
+                
